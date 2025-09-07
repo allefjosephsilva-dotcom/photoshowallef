@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Alef PhotoShow — Painel & Google Fotos</title>
+  <meta name="description" content="Site profissional de fotografia com álbuns, painel do dono, curtidas e comentários. Integração com Google Fotos (cliente)." />
+  <style>
+    :root{--bg:#0f0f12;--card:#111215;--muted:#9aa0a6;--radius:12px}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial;background:linear-gradient(180deg,#05060a,#0b0b0f);color:#e8eef6}
+    .container{max-width:1100px;margin:24px auto;padding:16px}
+    .btn{padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);cursor:pointer;color:inherit}
+    .masonry{column-count:3;column-gap:12px}
+    .card{display:inline-block;width:100%;margin:0 0 12px;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid rgba(255,255,255,0.03)}
+    .card img{width:100%;height:auto;display:block}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center}
+    .modal[open]{display:flex}
+    .box{width:720px;background:#0b0b0f;padding:14px;border-radius:12px}
+    input,textarea,select{width:100%;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:inherit}
+    .small{font-size:13px;color:var(--muted)}
+    @media(max-width:800px){.masonry{column-count:2}}
+    @media(max-width:480px){.masonry{column-count:1}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header style="display:flex;justify-content:space-between;align-items:center">
+      <div><h2>Alef PhotoShow</h2><div class="small">Integração com Google Fotos</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" id="open-owner">Painel do Dono</button>
+        <button class="btn" id="connect-google">Conectar Google Fotos</button>
+        <button class="btn" id="open-settings">Configurações</button>
+      </div>
+    </header>
+
+    <main style="margin-top:18px">
+      <section>
+        <h3>Álbuns</h3>
+        <div class="masonry" id="masonry"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings modal (contains Google Client ID input) -->
+  <div class="modal" id="settings-modal">
+    <div class="box">
+      <h3>Configurações</h3>
+      <div style="margin-top:8px">
+        <label class="small">Google OAuth Client ID (criado no Google Cloud Console)</label>
+        <input id="google-client-id" placeholder="Cole aqui seu Client ID (ex: 1234-...apps.googleusercontent.com)" />
+        <div class="small" style="margin-top:8px">Instruções: crie um OAuth 2.0 Client ID (Tipo: Web application) e adicione o URI de origem (ex: http://localhost) e o URI de redirecionamento recomendado.</div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn" id="save-settings">Salvar</button>
+        <button class="btn" id="close-settings">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Photos picker modal -->
+  <div class="modal" id="google-picker-modal">
+    <div class="box" style="width:900px;max-width:95%">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3>Selecionar fotos do Google Fotos</h3>
+        <button class="btn" id="close-google-picker">Fechar</button>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:12px">
+        <div style="flex:1">
+          <div class="small">Álbuns disponíveis</div>
+          <select id="g-albums" style="margin-top:8px"></select>
+          <div style="margin-top:12px" class="small">Fotos no álbum</div>
+          <div id="g-photos" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;max-height:420px;overflow:auto"></div>
+        </div>
+        <div style="width:320px">
+          <h4>Importar selecionadas</h4>
+          <div class="small">Fotos selecionadas: <span id="selected-count">0</span></div>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <button class="btn" id="import-selected">Importar para Álbum</button>
+            <select id="import-album" style="flex:1"></select>
+          </div>
+          <div style="margin-top:12px" class="small">Observação: após importar, as imagens são armazenadas localmente (IndexedDB). Para hospedagem real, configure Firebase ou outro storage.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- owner modal (simplified from previous version) -->
+  <div class="modal" id="owner-modal">
+    <div class="box">
+      <h3>Painel do Dono</h3>
+      <div style="margin-top:8px">
+        <label class="small">Senha</label>
+        <input id="owner-pass" type="password" placeholder="Senha do dono" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn" id="owner-login">Entrar</button>
+        <button class="btn" id="owner-cancel">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- load Google Identity Services library (required) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script>
+    // Basic DB wrapper (same as before)
+    const DB = (function(){ const name='alef_photos_db_v2', version=1; let db;
+      function open(){return new Promise((res,rej)=>{ if(db) return res(db); const rq=indexedDB.open(name,version); rq.onupgradeneeded=e=>{const idb=e.target.result; if(!idb.objectStoreNames.contains('albums')) idb.createObjectStore('albums',{keyPath:'id'}); if(!idb.objectStoreNames.contains('photos')) idb.createObjectStore('photos',{keyPath:'id'}); if(!idb.objectStoreNames.contains('meta')) idb.createObjectStore('meta',{keyPath:'k'});}; rq.onsuccess=()=>{db=rq.result;res(db)}; rq.onerror=e=>rej(e); })}
+      return { put(store,val){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(store,'readwrite').objectStore(store);const rq=t.put(val);rq.onsuccess=()=>res(rq.result);rq.onerror=rej}))},
+               get(store,key){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(store,'readonly').objectStore(store);const rq=t.get(key);rq.onsuccess=()=>res(rq.result);rq.onerror=rej}))},
+               all(store){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(store,'readonly').objectStore(store);const rq=t.getAll();rq.onsuccess=()=>res(rq.result);rq.onerror=rej}))},
+               delete(store,key){return open().then(db=>new Promise((res,rej)=>{const t=db.transaction(store,'readwrite').objectStore(store);const rq=t.delete(key);rq.onsuccess=()=>res(true);rq.onerror=rej}))} } })();
+
+    // Helpers
+    function uid(pref='id'){return pref+'_'+Math.random().toString(36).slice(2,9)}
+    function toDataURL(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file)})}
+
+    // UI elements
+    const masonry = document.getElementById('masonry');
+    const connectBtn = document.getElementById('connect-google');
+    const settingsModal = document.getElementById('settings-modal');
+    const googleClientIdInput = document.getElementById('google-client-id');
+    const saveSettingsBtn = document.getElementById('save-settings');
+    const openSettingsBtn = document.getElementById('open-settings');
+    const closeSettingsBtn = document.getElementById('close-settings');
+    const googlePickerModal = document.getElementById('google-picker-modal');
+    const gAlbumsSelect = document.getElementById('g-albums');
+    const gPhotosGrid = document.getElementById('g-photos');
+    const selectedCountEl = document.getElementById('selected-count');
+    const importSelectedBtn = document.getElementById('import-selected');
+    const importAlbumSelect = document.getElementById('import-album');
+    const openOwnerBtn = document.getElementById('open-owner');
+    const ownerModal = document.getElementById('owner-modal');
+    const ownerLoginBtn = document.getElementById('owner-login');
+    const ownerCancelBtn = document.getElementById('owner-cancel');
+    const closeGooglePicker = document.getElementById('close-google-picker');
+
+    let tokenClient = null;
+    let accessToken = null;
+    let googleClientId = null;
+    let fetchedAlbums = [];
+    let fetchedPhotos = [];
+    let selectedPhotos = new Set();
+
+    // initialize
+    (async function init(){
+      const meta = await DB.get('meta','google_client_id'); if(meta && meta.value) googleClientIdInput.value = meta.value;
+      await refreshUI();
+    })();
+
+    async function refreshUI(){
+      masonry.innerHTML='';
+      const photos = await DB.all('photos');
+      for(const p of photos){
+        const c = document.createElement('div'); c.className='card';
+        const img = document.createElement('img'); img.src=p.src; img.alt=p.title||'';
+        c.appendChild(img); masonry.appendChild(c);
+      }
+      // populate import-album select with local albums
+      importAlbumSelect.innerHTML='';
+      const albums = await DB.all('albums');
+      if(!albums.length){ const aid=uid('album'); await DB.put('albums',{id:aid,title:'Importadas',created:Date.now()}); }
+      const albums2 = await DB.all('albums');
+      albums2.forEach(a=>{const opt=document.createElement('option');opt.value=a.id;opt.textContent=a.title;importAlbumSelect.appendChild(opt);});
+    }
+
+    // Settings modal handlers
+    openSettingsBtn.onclick = ()=>{settingsModal.setAttribute('open','');settingsModal.style.display='flex'};
+    closeSettingsBtn.onclick = ()=>{settingsModal.removeAttribute('open');settingsModal.style.display='none'};
+    saveSettingsBtn.onclick = async ()=>{ const v=googleClientIdInput.value.trim(); await DB.put('meta',{k:'google_client_id',value:v}); alert('Client ID salvo.'); settingsModal.style.display='none'; settingsModal.removeAttribute('open'); googleClientId = v; }
+
+    // Owner panel (simplified)
+    openOwnerBtn.onclick = ()=>{ownerModal.setAttribute('open','');ownerModal.style.display='flex'};
+    ownerCancelBtn.onclick = ()=>{ownerModal.removeAttribute('open');ownerModal.style.display='none'};
+    ownerLoginBtn.onclick = async ()=>{ const v=document.getElementById('owner-pass').value; const saved=(await DB.get('meta','owner_pass'))?.value||'alef1235'; if(v===saved){ alert('Acessado painel! (simulado)'); ownerModal.style.display='none'; ownerModal.removeAttribute('open'); } else alert('Senha incorreta'); }
+
+    // Connect Google Photos
+    connectBtn.onclick = async ()=>{
+      const meta = await DB.get('meta','google_client_id'); googleClientId = meta?.value || googleClientIdInput.value.trim();
+      if(!googleClientId) return alert('Cole seu Google OAuth Client ID nas configurações antes de conectar.');
+
+      // initialize token client on demand
+      if(!tokenClient){
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: 'https://www.googleapis.com/auth/photoslibrary.readonly https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
+          callback: (resp) => {
+            if(resp.error){ console.error('token error',resp); alert('Erro ao obter token: '+resp.error); return; }
+            accessToken = resp.access_token;
+            // after token, open picker
+            openGooglePicker();
+          }
+        });
+      }
+      // request access token (will show consent)
+      tokenClient.requestAccessToken({prompt: 'consent'});
+    };
+
+    // Open picker modal and list albums
+    async function openGooglePicker(){
+      googlePickerModal.setAttribute('open',''); googlePickerModal.style.display='flex';
+      // list albums
+      try{
+        const res = await fetch('https://photoslibrary.googleapis.com/v1/albums?pageSize=50', { headers: { Authorization: 'Bearer '+accessToken } });
+        const j = await res.json();
+        fetchedAlbums = j.albums || [];
+        gAlbumsSelect.innerHTML='';
+        const optAll=document.createElement('option'); optAll.value='__all'; optAll.textContent='— Todas as fotos —'; gAlbumsSelect.appendChild(optAll);
+        fetchedAlbums.forEach(a=>{const o=document.createElement('option');o.value=a.id;o.textContent=a.title; gAlbumsSelect.appendChild(o);});
+        // load photos for selection (all)
+        await loadPhotosFromAlbum('__all');
+      }catch(err){ console.error(err); alert('Erro ao listar álbuns. Veja o console para detalhes.'); }
+    }
+
+    // load photos for album id (or all)
+    async function loadPhotosFromAlbum(albumId){
+      gPhotosGrid.innerHTML=''; fetchedPhotos=[]; selectedPhotos.clear(); updateSelectedCount();
+      try{
+        if(albumId==='__all'){
+          // call mediaItems endpoint (may be paginated)
+          let next = 'https://photoslibrary.googleapis.com/v1/mediaItems?pageSize=50';
+          while(next){
+            const res = await fetch(next, { headers: { Authorization: 'Bearer '+accessToken } });
+            const j = await res.json();
+            if(j.mediaItems) fetchedPhotos.push(...j.mediaItems);
+            next = null; // stop for safety; pagination handling could be added
+          }
+        } else {
+          // use mediaItems.search to get album items
+          const res = await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ albumId: albumId, pageSize: 100 }) });
+          const j = await res.json();
+          if(j.mediaItems) fetchedPhotos = j.mediaItems;
+        }
+        // render thumbnails
+        fetchedPhotos.slice(0,200).forEach(mi=>{ const imgUrl = mi.baseUrl + '=w400-h400'; const d=document.createElement('div'); d.style.position='relative';
+          d.style.cursor='pointer'; const im=document.createElement('img'); im.src=imgUrl; im.style.width='100%'; im.style.borderRadius='8px'; d.appendChild(im);
+          d.onclick = ()=>{ if(selectedPhotos.has(mi.id)){ selectedPhotos.delete(mi.id); d.style.outline=''; } else { selectedPhotos.add(mi.id); d.style.outline='3px solid rgba(255,255,255,0.18)'; } updateSelectedCount(); }
+          gPhotosGrid.appendChild(d);
+        });
+      }catch(err){ console.error(err); alert('Erro ao carregar fotos: '+err.message); }
+    }
+
+    gAlbumsSelect.onchange = ()=> loadPhotosFromAlbum(gAlbumsSelect.value);
+
+    function updateSelectedCount(){ document.getElementById('selected-count').textContent = selectedPhotos.size; }
+
+    // Import selected photos into local album
+    importSelectedBtn.onclick = async ()=>{
+      if(selectedPhotos.size===0) return alert('Nenhuma foto selecionada');
+      const albumId = importAlbumSelect.value; if(!albumId) return alert('Escolha um álbum local para importar');
+      // for each selected photo id, find mediaItem, get baseUrl, then fetch and convert to dataURL, then store
+      const items = fetchedPhotos.filter(x=>selectedPhotos.has(x.id));
+      const preview = document.getElementById('masonry');
+      for(const it of items){
+        try{
+          // get baseUrl - append =d to force download; but we will fetch as blob then convert
+          const url = it.baseUrl + '=d';
+          const resp = await fetch(url, { headers: { Authorization: 'Bearer '+accessToken } });
+          const blob = await resp.blob();
+          const dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(blob); });
+          const pid = uid('photo');
+          const p = { id: pid, title: it.filename || 'google_photo', src: dataUrl, albumId: albumId, albumTitle: (await DB.get('albums',albumId)).title, created: Date.now(), likes:0, comments:[] };
+          await DB.put('photos',p);
+        }catch(err){ console.error('import err',err); }
+      }
+      alert('Importação concluída. As imagens foram salvas localmente.'); googlePickerModal.style.display='none'; googlePickerModal.removeAttribute('open');
+      await refreshUI();
+    };
+
+    closeGooglePicker.onclick = ()=>{ googlePickerModal.style.display='none'; googlePickerModal.removeAttribute('open'); };
+
+    // Populate album select on open
+    googlePickerModal.addEventListener('click', e=>{ if(e.target===googlePickerModal){ googlePickerModal.style.display='none'; googlePickerModal.removeAttribute('open'); } });
+
+    // basic seeds
+    (async ()=>{ const albums = await DB.all('albums'); const photos = await DB.all('photos'); if(!albums.length && !photos.length){ const aid=uid('album'); await DB.put('albums',{id:aid,title:'Destaques',created:Date.now()}); await DB.put('photos',{id:uid('photo'),title:'Demo',src:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1500&auto=format&fit=crop',albumId:aid,albumTitle:'Destaques',created:Date.now(),likes:2,comments:[]}); } await refreshUI(); })();
+
+  </script>
+</body>
+</html>
