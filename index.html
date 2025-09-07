@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Allef PhotoShow</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark">
+  <header class="site-header">
+    <div class="brand">
+      <h1 id="site-title">Allef PhotoShow</h1>
+      <p id="site-desc">Galeria pública de fotografias</p>
+    </div>
+    <div class="actions">
+      <button id="toggle-theme" aria-label="Toggle theme">🌗</button>
+      <a id="admin-link" href="admin.html">Painel</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="hero">
+      <div class="hero-inner">
+        <h2 id="hero-title">Portfólio</h2>
+        <p id="hero-sub">Fotografias selecionadas — clique para ampliar</p>
+      </div>
+    </section>
+
+    <section class="gallery" id="gallery" aria-live="polite"></section>
+  </main>
+
+  <template id="photo-template">
+    <article class="photo-card">
+      <div class="photo-wrap">
+        <img class="photo-img" alt="Foto">
+        <div class="photo-overlay">
+          <button class="like-btn" title="Curtir">❤️ <span class="like-count">0</span></button>
+          <button class="share-btn" title="Copiar link">🔗</button>
+        </div>
+      </div>
+      <div class="photo-meta">
+        <div class="comments">
+          <details>
+            <summary>Comentários (<span class="comment-count">0</span>)</summary>
+            <div class="comments-list"></div>
+            <div class="comments-add">
+              <input class="comment-input" placeholder="Escreva um comentário..." />
+              <button class="comment-send">Enviar</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <div id="lightbox" class="lightbox" aria-hidden="true">
+    <div class="lightbox-inner">
+      <button id="lb-close" class="lb-close">✕</button>
+      <img id="lb-img" alt="">
+      <div id="lb-meta" class="lb-meta"></div>
+    </div>
+  </div>
+
+  <script src="js/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Allef PhotoShow</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark">
+  <header class="site-header">
+    <div class="brand">
+      <h1>Allef PhotoShow — Painel</h1>
+    </div>
+    <div class="actions">
+      <a href="index.html">Voltar ao site</a>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <section class="admin-panel">
+      <h2>Configurações do site</h2>
+      <label>Nome do site
+        <input id="admin-title" placeholder="Allef PhotoShow" />
+      </label>
+      <label>Descrição
+        <input id="admin-desc" placeholder="Galeria pública de fotografias" />
+      </label>
+      <label>Plano de fundo (URL de imagem)
+        <input id="bg-url" placeholder="Cole uma URL de imagem para o background" />
+      </label>
+      <div class="btn-row">
+        <button id="save-settings">Salvar configurações</button>
+        <button id="reset-settings">Resetar</button>
+      </div>
+    </section>
+
+    <section class="admin-photos">
+      <h2>Gerenciar fotos</h2>
+      <p>Adicione fotos copiando a <strong>URL compartilhada</strong> do Google Fotos (ex.: link de compartilhamento) — o sistema tentará usar o URL direto para exibição.</p>
+      <label>URL do Google Fotos
+        <input id="photo-url" placeholder="Cole a URL aqui..." />
+      </label>
+      <label>Título (opcional)
+        <input id="photo-title" placeholder="Título da foto" />
+      </label>
+      <div class="btn-row">
+        <button id="add-photo">Adicionar foto</button>
+        <button id="clear-photos">Remover todas</button>
+      </div>
+
+      <h3>Fotos salvas</h3>
+      <div id="admin-gallery" class="admin-gallery"></div>
+    </section>
+
+    <section class="admin-auth">
+      <h2>Segurança</h2>
+      <p>Defina uma senha simples para acessar o painel (armazenada localmente).</p>
+      <label>Senha do painel
+        <input id="admin-pass" placeholder="senha" type="password" />
+      </label>
+      <div class="btn-row">
+        <button id="save-pass">Salvar senha</button>
+        <button id="logout">Logout</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
